@@ -76,27 +76,48 @@ function rgbToHex(rgb) {
     ).join("");
 }
 
+function getEffectiveBg() {
+    // Intenta body primero, luego html, luego el primer div hijo
+    const candidates = [
+        document.body,
+        document.documentElement,
+        document.body?.firstElementChild
+    ];
+    for (const el of candidates) {
+        if (!el) continue;
+        const bg = getComputedStyle(el).backgroundColor;
+        if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") return bg;
+    }
+    return null;
+}
+
 function notifyAndroid() {
     if (!window.AndroidBridge) return;
-    const bg = getComputedStyle(document.body).backgroundColor;
+    const bg = getEffectiveBg();
+    if (!bg) return;
     const hex = rgbToHex(bg);
     if (hex) AndroidBridge.onBackgroundChanged(hex);
 }
 
 window.addEventListener("load", notifyAndroid);
 
+// Polling como fallback por si el MutationObserver no captura el cambio
+let lastColor = null;
+setInterval(() => {
+    const bg = getEffectiveBg();
+    if (bg && bg !== lastColor) {
+        lastColor = bg;
+        notifyAndroid();
+    }
+}, 300);
+
 const observer = new MutationObserver(notifyAndroid);
-observer.observe(document.body, {
-    attributes: true,
-    attributeFilter: ["style", "class"]
-});
-observer.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ["style", "class"]
-});
+observer.observe(document.body, { attributes: true, attributeFilter: ["style", "class"], subtree: true });
+observer.observe(document.documentElement, { attributes: true, attributeFilter: ["style", "class"], subtree: true });
 </script>
 
 
     
 </body>
 </html>
+
